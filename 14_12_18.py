@@ -101,7 +101,6 @@ def get_category(soup):
 
 def get_description(soup):
 	tag_description = soup.find('div', {'itemprop':'description'}).find('p')
-	#никаких параметров в нужном тэге нет, потому можно обойтись одним sub-ом
 	item_description = tag_description.string
 	return item_description
 
