@@ -1,7 +1,5 @@
 #т.к. питону я только учусь, то я закомментирую всё для себя так, чтобы потом если чего понять что что делает
 import requests
-#import json
-import re
 import sqlite3
 from bs4 import BeautifulSoup
 from time import time
@@ -49,84 +47,81 @@ conn.execute(query) = удаление таблицы, если та сущес�
 
 query = 'DELETE FROM '+table+' WHERE '+id_column+' = "'+record_id'"'
 conn.execute(query) = удалить запись из таблицы, где id = определенному значению
-
-
-
-
-
 '''
 
 links = []
 base_url = 'http://spreadreward.com'
 
 
+#первые 6 def-ов для первой задачи
+def get_name(soup):
+	#Поясню 1 раз на этом, следующие 5 get-ов идут по шаблону
 
-
-
-#первые 5 def-ов для первой задачи
-def get_name(link):
-	#Поясню 1 раз на этом, дальше эти 5 get-ов идут по шаблону
-
-	#создание данных для копания в них
-	site = requests.get(link).text
-	soup = BeautifulSoup(site, features='lxml')
 	#Получение нужного tag-а html страницы
 	#т.к. страницу строит бот, то у него они все примерно одинаковые
 	#потому после нахождения нужного tag-а, если он 1, то ничего не дописываем,
 	#если их несколько, то идем через find_all() и ручками определяем нужный из массива
 	#tag_X = кусок html кода из целого, в котором находится нужное
 	tag_name = soup.find('h1', {'itemprop':'name'})
-	#Находим именно то нужное и сразу обрезаем излишки
+	#Находим именно то нужное и возвращаем обратно
 	#item_X = нужное
-	item_name = re.sub(r'(<|>)', '', re.findall(r'>.+<', str(tag_name))[0])#Без str оно не хочет работать
+	item_name = tag_name.string
 	return  item_name
 
-def get_image_url(link):
-	site = requests.get(link).text
-	soup = BeautifulSoup(site, features='lxml')
+def get_image_url(soup):
+	#там в коде сперва идут 3 относящиеся товара, и четвертым идет нужный товар, но -1 то же идёт
 	tag_image_url = soup.find_all('img', {'class':'attachment-shop_catalog wp-post-image'})[-1]
-	item_image_url = re.sub(r'(src=\"|\" )', '', re.findall(r'src=\".+\"\s', str(tag_image_url))[0])
+	item_image_url = tag_image_url.get('src')
 	return item_image_url
 
-def get_price(link):
-	site = requests.get(link).text
-	soup = BeautifulSoup(site, features='lxml')
+def get_price(soup):
+	#цена может быть со скидкой, старя указывается первой, потому нам нужна вторая
+	#но на всякий случай поставим -1
 	tag_price = soup.find('p', {'class':'price'}).find_all('span', {'class':'amount'})[-1]
-	item_price = re.sub(r'(<|>руб.)', '', re.findall(r'>.+<', str(tag_price))[0])
+	#надо обрезать, т.к. есть "руб."
+	#т.к. 2 арг = ДО, то нам надо сканкатаниорвать с последнийм символом
+	item_price = tag_price.string[4:-1]+tag_price.string[-1]
 	return item_price
 
-def get_category(link):
-	site = requests.get(link).text
-	soup = BeautifulSoup(site, features='lxml')
-	tag_category = soup.find('div', {'class':'product_meta'}).find_all('a')
+def get_category(soup):
 	#категорий может быть несколько, но по 2 из них групируются в 1. Категории не имеют пересечений
 	#потому определю конечную и запомню групировку
 	#к сожалению, т.к. мы парсим, то только групировкой руками и можно
 	#music = single + albums
 	#clothing = hoodies + t-shirts
-	#posters
-	item_categories=[]
-	for cat in tag_category:
-		match = re.sub(r'(<|>)', '', re.findall(r'>.+<', str(cat))[0])
-		item_categories.append(match)
-	#тут мы получили категори_и, осталось определить нужные
-	if len(item_categories)>0:
-		#вроде бы вот это разделение по длине массива можно убрать, но я не хочу рисковать
-		if (str(item_categories[0])=='Music') or (str(item_categories[0])=='Clothing'):
-			item_category=str(item_categories[1])
-		else:
-			item_category=str(item_categories[0])
-	else:
-		item_category=str(item_categories[0])
-	return item_category
+	#posters не делится
+	#получаем 1 или 2 тега
+	tags_with_categories = soup.find('div', {'class':'product_meta'}).find_all('a')
+	#пробегаемся по ним
+	for tag_category in tags_with_categories:
+		item_category=tag_category.string
+		#выбираем нужное и возвращаем
+		if item_category!='Music' and item_category!='Clothing':
+			return item_category
 
-def get_description(link):
-	site = requests.get(link).text
-	soup = BeautifulSoup(site, features='lxml')
+def get_description(soup):
 	tag_description = soup.find('div', {'itemprop':'description'}).find('p')
 	#никаких параметров в нужном тэге нет, потому можно обойтись одним sub-ом
-	item_description = re.sub(r'(<p>|</p>)', '', str(tag_description))
+	item_description = tag_description.string
 	return item_description
+
+def get_product_data(link):
+	#создание данных для копания в них
+	site = requests.get(link).text
+	soup = BeautifulSoup(site, features='lxml')
+	#получение имени
+	name = get_name(soup)
+	#получение url адреса картинки
+	image_url = get_image_url(soup)
+	#получение цены
+	price = get_price(soup)
+	#получение категории
+	category = get_category(soup)
+	#получение описания
+	description = get_description(soup)
+	#передача данных о товарах !!!в правильном порядке!!!!
+	return name, description, image_url, price, category
+
 
 
 #def для 2-ой задачи
@@ -135,35 +130,30 @@ def get_links(url):
 	global links, base_url
 	#получаем текст ссылки
 	site=requests.get(url).text
-	soup_main = BeautifulSoup(site, features='lxml')
-	#пойду по категориям, чтобы всё найти
-	categories = soup_main.find_all('li', {'class':'product-category'})
-	#он почему-то не хочет делать массивы, потому сделаю так
-	categories_url = re.findall(r'<a.+>', str(categories))
+	soup = BeautifulSoup(site, features='lxml')
+	#пойду по категориям, чтобы найти все товары
 	#теперь магия
-	#если категорий нет, то выполнится следующий код
-	if len(categories_url)==0:
+	#поиск категорий
+	li_s_with_urls = soup.find_all('li', {'class':'product-category'})
+	if len(li_s_with_urls)==0:
 		#если категорий нет, то выполнится следующий код
-		#найдум нужные куски html
-		products_of_category = soup_main.find_all('li', {'class':'product'})
+		#найдём нужные куски html
+		products_of_category = soup.find_all('li', {'class':'product'})
 		#т.к. у нас массив, то пробежимся по нему
 		for product_of_category in products_of_category:
 			#там есть 2 tag-а "a", а нам ужен первый. берем из него ссылку
-			product_url_of_category=product_of_category.find_all('a')[0].get('href')
+			product_url_of_category=product_of_category.find('a').get('href')
 			#и канкатанируем с изначальной
 			product_url = base_url+product_url_of_category
 			links.append(product_url)
 	else:
 		#если категории есть, то
 		#т.к. у нас массив категорий, то пробежимся по ним
-		for category in categories_url:
-			#делаем новое мыло для поиска в нужной части
-			soup=BeautifulSoup(str(category), features='lxml')
-			category_url = soup.find('a').get('href')
+		for li_with_url in li_s_with_urls:
+			category_url = li_with_url.find('a').get('href')
 			#получаем нужную ссылку, канкатанируем и делаем рекурсию
 			#рекурсия позволяет войти во _все_ конечные категории
 			get_links(url+category_url)
-	#на эту функцию у меня ушло 4 часа
 
 def get_categories(curs):
 	#запрос на категории
@@ -207,15 +197,10 @@ def get_and_print_avarage_prices(categories, prices_of_categories):
 
 
 
-
-
-
-
-
 def main():
 	#решил работать с sql тут, т.к. иначе надо будет хранить большое кол-во данных в памяти
 	start_time = time()
-	#надо её сохранять, иначе он не хочет работать
+	#надо сохранять таблицу, иначе он не хочет работать
 	conn = sqlite3.connect('./database.db')
 
 	curs=conn.cursor()
@@ -230,18 +215,13 @@ def main():
 
 	get_links(base_url)
 	for link in links:
-		#получение требуемых данных товара
-		name =  get_name(link)
-		description = get_description(link)
-		image_url = get_image_url(link)
-		price = get_price(link)
-		category = get_category(link)
-		#их сбор для дальнейшего внесения
-		product_data = (name, description, image_url, price, category)
+		#получение требуемых данных товара и их сбор для дальнейшего внесения
+		product_data = (get_product_data(link))
 		#собственно, внесение и подтверждение
+		
 		curs.execute('INSERT INTO products_table VALUES(?, ?, ?, ?, ?)',product_data)
 		conn.commit()
-
+	#всё для четвертой задачи
 	categories = get_categories(curs)
 	prices_of_categories = get_prices_of_categories(categories, curs)
 	get_and_print_avarage_prices(categories, prices_of_categories)
@@ -249,6 +229,7 @@ def main():
 
 	curs.close()
 	conn.close()
+	
 
 	print('-------------Completed in %.3f seconds-------------' %(time()-start_time))
 
